@@ -1,0 +1,91 @@
+From 42e1d96ead4eff7e52707db64336412368105d17 Mon Sep 17 00:00:00 2001
+From: Etienne Wodey <airwoodix@posteo.me>
+Date: Fri, 27 Mar 2020 23:55:27 +0100
+Subject: [PATCH] cmake: don't build blosc lib, link against system libblosc
+
+---
+ CMakeLists.txt | 34 +++++++---------------------------
+ 1 file changed, 7 insertions(+), 27 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f3de767..bcb68f2 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,6 +1,6 @@
+ cmake_minimum_required(VERSION 2.8.10)
+ project(blosc_hdf5)
+-include(ExternalProject)
++find_package(PkgConfig REQUIRED)
+ 
+ # options
+ option(BUILD_TESTS
+@@ -13,28 +13,11 @@ if(BUILD_PLUGIN)
+       "Where to install the dynamic HDF5-plugin")
+ endif(BUILD_PLUGIN)
+ 
+-set(BLOSC_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/blosc")
+-set(BLOSC_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/blosc")
+-set(BLOSC_CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${BLOSC_INSTALL_DIR})
+-
+-message("BLOSC_PREFIX='${BLOSC_PREFIX}'")
+-message("BLOSC_INSTALL_DIR='${BLOSC_INSTALL_DIR}'")
+-message("BLOSC_CMAKE_ARGS='${BLOSC_CMAKE_ARGS}'")
+-message("GIT_EXECUTABLE='${GIT_EXECUTABLE}'")
+-
+-ExternalProject_Add(project_blosc
+-  PREFIX ${BLOSC_PREFIX}
+-  GIT_REPOSITORY https://github.com/Blosc/c-blosc.git
+-  INSTALL_DIR ${BLOSC_INSTALL_DIR}
+-  CMAKE_ARGS ${BLOSC_CMAKE_ARGS}
+-)
+-
+-
+ # sources
+ set(SOURCES src/blosc_filter.c)
+ set(PLUGIN_SOURCES src/blosc_filter.c src/blosc_plugin.c )
+ 
+-# dependencies
++# dependencies: HDF5
+ if(MSVC)
+     # FindHDF5.cmake does not find Windows installations. Try to
+     # use an environment variable instead until the official "find"
+@@ -49,23 +32,20 @@ else(MSVC)
+ endif(MSVC)
+ include_directories(${HDF5_INCLUDE_DIRS})
+ 
++# dependencies: blosc
++pkg_check_modules(BLOSC REQUIRED blosc)
+ 
+-# add blosc libraries
+-add_library(blosc_shared SHARED IMPORTED)
+-set_property(TARGET blosc_shared PROPERTY IMPORTED_LOCATION ${BLOSC_INSTALL_DIR}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}blosc${CMAKE_SHARED_LIBRARY_SUFFIX})
+-add_dependencies(blosc_shared project_blosc)
+-include_directories(${BLOSC_INSTALL_DIR}/include)
+ 
+ add_library(blosc_filter_shared SHARED ${SOURCES})
+ set_target_properties(
+   blosc_filter_shared PROPERTIES OUTPUT_NAME blosc_filter)
+-target_link_libraries(blosc_filter_shared blosc_shared ${HDF5_LIBRARIES})
++target_link_libraries(blosc_filter_shared ${BLOSC_LIBRARIES} ${HDF5_LIBRARIES})
+ 
+ if(BUILD_PLUGIN)
+     add_library(blosc_plugin_shared SHARED ${PLUGIN_SOURCES})
+     set_target_properties(
+       blosc_plugin_shared PROPERTIES OUTPUT_NAME H5Zblosc)
+-    target_link_libraries(blosc_plugin_shared blosc_shared ${HDF5_LIBRARIES})
++    target_link_libraries(blosc_plugin_shared ${BLOSC_LIBRARIES} ${HDF5_LIBRARIES})
+ 
+     install(TARGETS blosc_plugin_shared DESTINATION ${PLUGIN_INSTALL_PATH} COMPONENT HDF5_FILTER_DEV)
+ endif(BUILD_PLUGIN)
+@@ -76,7 +56,7 @@ install(TARGETS blosc_filter_shared DESTINATION lib COMPONENT HDF5_FILTER_DEV)
+ 
+ 
+ # test
+-message("LINK LIBRARIES='blosc_filter_shared ${HDF5_LIBRARIES}'")
++message("LINK LIBRARIES='blosc_filter_shared ${BLOSC_LIBRARIES} ${HDF5_LIBRARIES}'")
+ if(BUILD_TESTS)
+     enable_testing()
+     set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+-- 
+2.25.1
+
